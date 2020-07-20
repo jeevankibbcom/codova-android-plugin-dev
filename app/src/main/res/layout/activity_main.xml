@@ -12,12 +12,14 @@
         android:layout_height="match_parent">
 
         <ImageView
+            android:id="@+id/iv_recording_indicate"
             android:layout_width="60dp"
             android:layout_height="60dp"
             android:layout_gravity="end"
             android:layout_marginEnd="25dp"
             android:background="@color/colorLightGrey"
-            android:src="@drawable/ic_recording_indicator" />
+            android:src="@drawable/ic_recording_indicator"
+            android:visibility="gone"/>
 
         <ProgressBar
             android:id="@+id/pb_video_loading"
@@ -39,7 +41,7 @@
             android:elevation="3dp"
             android:layout_gravity="bottom"
             android:background="@color/colorLightGrey"
-            android:visibility="visible">
+            android:visibility="gone">
 
             <ImageView
                 android:id="@+id/iv_mute"

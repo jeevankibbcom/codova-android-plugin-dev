@@ -8,12 +8,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
@@ -22,12 +23,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.constraintlayout.widget.ConstraintLayout;
-import androidx.documentfile.provider.DocumentFile;
+
+import com.example.vxgplugin.utils.Position;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.nio.ByteBuffer;
-import java.util.Objects;
 
 import veg.mediaplayer.sdk.MediaPlayer;
 import veg.mediaplayer.sdk.MediaPlayerConfig;
@@ -40,36 +41,108 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
     private Handler mHandler = new Handler();
     private Handler statusHandler;
 
+    //Layouts
+    private ConstraintLayout clMediaController;
+    private ImageView ivPausePlayBtn;
+    private ImageView ivRecordStartStopBtn;
+    private ImageView ivMuteControlBtn;
+    private ImageView ivRecordingIndicator;
+    //ProgressBar
     private ProgressBar pbShowLoading;
-
+    //Player
     MediaPlayer vxgMediaPlayer = null;
+
+    private Position liveStreamPos;
+
     private int mOldMsg =0;
 
+    //region Lifecycle
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        //Layouts
+        clMediaController = (ConstraintLayout) findViewById(R.id.cl_media_controller);
+        ivPausePlayBtn = (ImageView) findViewById(R.id.iv_pause);
+        ivRecordStartStopBtn = (ImageView) findViewById(R.id.iv_record_start);
+        ivMuteControlBtn = (ImageView) findViewById(R.id.iv_mute);
+        ivRecordingIndicator = (ImageView) findViewById(R.id.iv_recording_indicate);
+        //ProgressBar
+        pbShowLoading = (ProgressBar) findViewById(R.id.pb_video_loading);
         //Player
         vxgMediaPlayer = (MediaPlayer) findViewById(R.id.playerView);
 
-        //Layouts
-        final ConstraintLayout clMediaController = (ConstraintLayout) findViewById(R.id.cl_media_controller);
-        final ImageView ivPausePlayBtn = (ImageView) findViewById(R.id.iv_pause);
-        final ImageView ivRecordStartStopBtn = (ImageView) findViewById(R.id.iv_record_start);
-        final ImageView ivMuteControlBtn = (ImageView) findViewById(R.id.iv_mute);
         //Set mute to false on start
         ivMuteControlBtn.setTag(false);
 
-        //ProgressBar
-        pbShowLoading = (ProgressBar) findViewById(R.id.pb_video_loading);
+        vxgMediaPlayer.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                v.performClick();
+                Log.d(TAG, "ACTION_DOWN");
+                showMediaControls();
+            }
+            return true;
+        });
+    }
 
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        if (vxgMediaPlayer != null &&
+                MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
+                MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closed)) {
+            vxgMediaPlayer.onResume();
+            vxgMediaPlayer.Play();
+        } else initVxgMediaPlayer();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        if (vxgMediaPlayer != null &&
+                MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
+                MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closing)) {
+            vxgMediaPlayer.Pause();
+            vxgMediaPlayer.onPause();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (vxgMediaPlayer != null &&
+                MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
+                MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closing)) {
+            vxgMediaPlayer.onResume();
+            vxgMediaPlayer.Play();
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+
+        if (vxgMediaPlayer != null) vxgMediaPlayer.Pause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        if (vxgMediaPlayer != null) vxgMediaPlayer.Close();
+        vxgMediaPlayer.onDestroy();
+    }
+    //endregion
+
+    private void initVxgMediaPlayer() {
         statusHandler = new StatusHandler();
 
         MediaPlayerConfig vxgPlayerConfig = new MediaPlayerConfig();
-        new Handler(Looper.getMainLooper()).post(() -> {
-            pbShowLoading.setVisibility(View.VISIBLE);
-        });
+        showLoadingPlayerLoader(true);
         //Player config
         vxgPlayerConfig.setConnectionUrl("rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mov");
         vxgPlayerConfig.setDecodingType(1);
@@ -85,70 +158,95 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
         vxgPlayerConfig.getRecordSplitTime();
         vxgPlayerConfig.setRecordPrefix("vxg_rec");
 
-        //Player setup
+        //Player startup
         vxgMediaPlayer.Open(vxgPlayerConfig,this);
+    }
 
-        //mute - true – audio is off , false – audio is on.
-        boolean isMuted = false;
+    private void showLoadingPlayerLoader(boolean showLoader) {
+        if (pbShowLoading != null) {
+            if (showLoader) pbShowLoading.setVisibility(View.VISIBLE);
+            else if (pbShowLoading.isShown()) pbShowLoading.setVisibility(View.GONE);
+        }
+    }
 
-        vxgMediaPlayer.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                v.performClick();
-                Log.d(TAG, "ACTION_DOWN");
-                if (clMediaController != null) {
-                    clMediaController.setVisibility(View.VISIBLE);
+    private void showMediaControls() {
+        if (clMediaController != null) {
+            clMediaController.setVisibility(View.VISIBLE);
 
+            if (vxgMediaPlayer != null &&
+                    MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
+                    MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closing)) {
+
+                ivPausePlayBtn.setOnClickListener(view -> {
+                    if (vxgMediaPlayer.getState() == MediaPlayer.PlayerState.Started) {
+                        vxgMediaPlayer.Pause();
+                        ivPausePlayBtn.setImageResource(R.drawable.ic_play_button);
+                    } else if (vxgMediaPlayer.getState() == MediaPlayer.PlayerState.Paused) {
+                        vxgMediaPlayer.Play();
+                        ivPausePlayBtn.setImageResource(R.drawable.ic_pause_button);
+                    }
+                });
+
+                ivRecordStartStopBtn.setOnClickListener(view -> {
+                    if (vxgMediaPlayer.getState() == MediaPlayer.PlayerState.Started) {
+                        //State of recording: 0: stopped, 1: paused, 2: run
+                        if (vxgMediaPlayer.RecordGetStat(9) == 0 || vxgMediaPlayer.RecordGetStat(9) == 1) {
+                            vxgMediaPlayer.RecordStart();
+                            ivRecordStartStopBtn.setImageResource(R.drawable.ic_recording_stop);
+                        } else if (vxgMediaPlayer.RecordGetStat(9) == 2) {
+                            vxgMediaPlayer.RecordStop();
+                            ivRecordStartStopBtn.setImageResource(R.drawable.ic_record_start);
+                        }
+                    }
+                });
+
+                ivMuteControlBtn.setOnClickListener(view -> {
+                    //mute - true – audio is off , false – audio is on.
                     if (vxgMediaPlayer != null &&
                             MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
                             MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closing)) {
-
-                        ivPausePlayBtn.setOnClickListener(view -> {
-                            if (vxgMediaPlayer.getState() == MediaPlayer.PlayerState.Started) {
-                                vxgMediaPlayer.Pause();
-                                ivPausePlayBtn.setImageResource(R.drawable.ic_play_button);
-                            } else if (vxgMediaPlayer.getState() == MediaPlayer.PlayerState.Paused) {
-                                vxgMediaPlayer.Play();
-                                ivPausePlayBtn.setImageResource(R.drawable.ic_pause_button);
-                            }
-                        });
-
-                        ivRecordStartStopBtn.setOnClickListener(view -> {
-                            if (vxgMediaPlayer.getState() == MediaPlayer.PlayerState.Started) {
-                                //State of recording: 0: stopped, 1: paused, 2: run
-                                if (vxgMediaPlayer.RecordGetStat(9) == 0 || vxgMediaPlayer.RecordGetStat(9) == 1) {
-                                    vxgMediaPlayer.RecordStart();
-                                    ivRecordStartStopBtn.setImageResource(R.drawable.ic_recording_stop);
-                                } else if (vxgMediaPlayer.RecordGetStat(9) == 2) {
-                                    vxgMediaPlayer.RecordStop();
-                                    ivRecordStartStopBtn.setImageResource(R.drawable.ic_record_start);
-                                }
-                            }
-                        });
-
-                        ivMuteControlBtn.setOnClickListener(view -> {
-                            if (vxgMediaPlayer != null &&
-                                    MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
-                                    MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closing)) {
-                                if (ivMuteControlBtn.getTag().equals(true)) {
-                                    vxgMediaPlayer.toggleMute(false);
-                                    ivMuteControlBtn.setTag(false);
-                                    ivMuteControlBtn.setImageResource(R.drawable.ic_mute);
-                                } else if (ivMuteControlBtn.getTag().equals(false)) {
-                                    vxgMediaPlayer.toggleMute(true);
-                                    ivMuteControlBtn.setTag(true);
-                                    ivMuteControlBtn.setImageResource(R.drawable.ic_unmute);
-                                }
-                            }
-                        });
+                        if (ivMuteControlBtn.getTag().equals(true)) {
+                            vxgMediaPlayer.toggleMute(false);
+                            ivMuteControlBtn.setTag(false);
+                            ivMuteControlBtn.setImageResource(R.drawable.ic_mute);
+                        } else if (ivMuteControlBtn.getTag().equals(false)) {
+                            vxgMediaPlayer.toggleMute(true);
+                            ivMuteControlBtn.setTag(true);
+                            ivMuteControlBtn.setImageResource(R.drawable.ic_unmute);
+                        }
                     }
-                    mHandler.postDelayed(() -> clMediaController.setVisibility(View.INVISIBLE), 2000);
-                }
+                });
             }
-            return true;
-        });
+            //Remove previous touch handler callback
+            mHandler.removeCallbacks(mRunnableHideMediaControls);
+            //Add new touch handler callback
+            mHandler.postDelayed(mRunnableHideMediaControls, 3000);
+        }
+    }
+    //Hide media controls
+    //Ref ---->  https://stackoverflow.com/a/60523789/10459992
+    Runnable mRunnableHideMediaControls = () -> {
+        if (clMediaController != null) clMediaController.setVisibility(View.INVISIBLE);
+    };
+
+    private void recordingAnimation(boolean startAnimation) {
+        ivRecordingIndicator.setVisibility(View.VISIBLE);
+        Animation anim = new AlphaAnimation(0.0f, 1.0f);
+        anim.setDuration(800); //You can manage the blinking time with this parameter
+        anim.setStartOffset(20);
+        anim.setRepeatMode(Animation.REVERSE);
+        anim.setRepeatCount(Animation.INFINITE);
+        ivRecordingIndicator.setAnimation(anim);
+        if (startAnimation) {
+            anim.start();
+        } else {
+            anim.cancel();
+            anim.reset();
+            if (ivRecordingIndicator.getVisibility() == View.VISIBLE) ivRecordingIndicator.setVisibility(View.GONE);
+        }
     }
 
-//    region Recorder path MediaStoreAPI for android 10  --> not working
+    //    region Recorder path MediaStoreAPI for android 10  --> not working
     public String getRecorderPathQ() {
         String videoPath = "/Wifido/User/Wifido_Videos";
         ContentResolver resolver = getApplication().getContentResolver();
@@ -197,6 +295,10 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
         return mediaStorageDir.getPath();
     }
 
+    public void showToast(Context context,String message,int duration) {
+        this.runOnUiThread(() -> Toast.makeText(context,message,duration).show());
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -215,9 +317,7 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
                 switch (status) {
                     //Player notifications
                     case CP_INIT_FAILED:
-                        if (pbShowLoading != null) {
-                            if (pbShowLoading.isShown()) pbShowLoading.setVisibility(View.GONE);
-                        }
+                        showLoadingPlayerLoader(false);
                         showToast(context,"Check network",Toast.LENGTH_LONG);
                         break;
 
@@ -231,9 +331,7 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
                         break;
 
                     case PLP_BUILD_SUCCESSFUL:
-                        if (pbShowLoading != null) {
-                            if (pbShowLoading.isShown()) pbShowLoading.setVisibility(View.GONE);
-                        }
+                        showLoadingPlayerLoader(false);
                         break;
 
                     case VRP_LASTFRAME:
@@ -243,13 +341,13 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
                         //Recorder notifications
                     case CP_RECORD_STARTED:
                         Log.d(TAG,"Started recording");
-                        showToast(context,"Recording started",Toast.LENGTH_SHORT);
+                        recordingAnimation(true);
                         //showToast(getBaseContext(),"Recorded saved in "+vxgMediaPlayer.RecordGetFileName(1),Toast.LENGTH_LONG);
                         break;
 
                     case CP_RECORD_STOPPED:
                         Log.d(TAG,"Stopped recording");
-                        showToast(getBaseContext(),"Recorder Stopped",Toast.LENGTH_SHORT);
+                        recordingAnimation(false);
 //                      if (vxgMediaPlayer != null) {
 //                            if (vxgMediaPlayer.RecordGetStat(4) == 0) showToast(context,"Storage permission is denied",Toast.LENGTH_LONG);
 //                        } else
@@ -258,53 +356,13 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
 
                     case CP_RECORD_CLOSED:
                         Log.d(TAG,"Closed recording");
-                        showToast(getBaseContext(),"Recorder closed",Toast.LENGTH_SHORT);
+                        recordingAnimation(false);
                         if (vxgMediaPlayer != null)
                             showToast(getBaseContext(),"Recorded video successfully saved in "+vxgMediaPlayer.RecordGetFileName(0),Toast.LENGTH_LONG);
                         break;
                 }
 
             }
-    }
-
-    private void dismissProgressBar() {
-    }
-
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-
-        if (vxgMediaPlayer != null &&
-                MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
-                MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closing)) {
-            vxgMediaPlayer.Pause();
-            vxgMediaPlayer.onPause();
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-
-        if (vxgMediaPlayer != null &&
-                MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
-                MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closing)) {
-            vxgMediaPlayer.onResume();
-            vxgMediaPlayer.Play();
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (vxgMediaPlayer != null) vxgMediaPlayer.Close();
-        vxgMediaPlayer.onDestroy();
-
-        super.onDestroy();
-    }
-
-    public void showToast(Context context,String message,int duration) {
-        this.runOnUiThread(() -> Toast.makeText(context,message,duration).show());
     }
 
     @Override
