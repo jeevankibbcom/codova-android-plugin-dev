@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    style="@style/Theme.MaterialComponents.NoActionBar"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -9,6 +10,7 @@
     <veg.mediaplayer.sdk.MediaPlayer
         android:id="@+id/playerView"
         android:layout_width="match_parent"
+        android:background="@color/blackBackground"
         android:layout_height="match_parent">
 
         <ImageView
@@ -17,7 +19,7 @@
             android:layout_height="60dp"
             android:layout_gravity="end"
             android:layout_marginEnd="25dp"
-            android:background="@color/colorLightGrey"
+            android:elevation="3dp"
             android:src="@drawable/ic_recording_indicator"
             android:visibility="gone"/>
 
@@ -28,6 +30,14 @@
             android:elevation="3dp"
             android:layout_gravity="center"
             android:visibility="gone"/>
+
+        <FrameLayout
+            android:id="@+id/fl_flash_layout"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            android:background="@color/whiteTransparent"
+            android:visibility="gone"/>
+
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/cl_media_controller"
@@ -42,6 +52,20 @@
             android:layout_gravity="bottom"
             android:background="@color/colorLightGrey"
             android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/iv_take_video_shot"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:padding="8dp"
+                android:layout_gravity="start"
+                android:src="@drawable/ic_screenshot"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/iv_mute"
+                app:layout_constraintVertical_bias="0.5"
+                app:layout_constraintHorizontal_bias="0.5"/>
 
             <ImageView
                 android:id="@+id/iv_mute"
@@ -86,8 +110,22 @@
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintVertical_bias="0.5" />
 
+            <ImageView
+                android:id="@+id/iv_voice_record_start_stop"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:layout_gravity="end"
+                android:padding="8dp"
+                android:src="@drawable/ic_voice_not_recording"
+                app:layout_constraintStart_toEndOf="@id/iv_record_start"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintVertical_bias="0.5"
+                app:layout_constraintHorizontal_bias="0.5"/>
+
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </veg.mediaplayer.sdk.MediaPlayer>
 
-</FrameLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
