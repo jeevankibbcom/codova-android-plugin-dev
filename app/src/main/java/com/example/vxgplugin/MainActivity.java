@@ -5,6 +5,8 @@ import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.media.MediaRecorder;
 import android.net.Uri;
@@ -17,6 +19,7 @@ import android.provider.MediaStore;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.AccelerateInterpolator;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.widget.FrameLayout;
@@ -37,6 +40,10 @@ import com.karumi.dexter.listener.PermissionDeniedResponse;
 import com.karumi.dexter.listener.PermissionGrantedResponse;
 import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.single.PermissionListener;
+import com.otaliastudios.zoom.ZoomLogger;
+import com.otaliastudios.zoom.ZoomSurfaceView;
+
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -62,12 +69,17 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
     //Layouts
     private ConstraintLayout clMediaController;
     private FrameLayout flFlash;
+    private ZoomSurfaceView zoomVideoSurface;
     private ImageView ivPausePlayBtn;
     private ImageView ivRecordStartStopBtn;
     private ImageView ivMuteControlBtn;
     private ImageView ivRecordingIndicator;
     private ImageView ivVoiceRecordingStartStopBtn;
     private ImageView ivTakeScreenShot;
+    private ImageView ivScreenRotate;
+    private ImageView ivCloseBtn;
+    //private ImageView ivSdHdBtn;
+
     //ProgressBar
     private ProgressBar pbShowLoading;
     //Video Player
@@ -78,25 +90,29 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
     private Position liveStreamPos;
 
     private int mOldMsg =0;
-    private static String recordingPermission = Manifest.permission.RECORD_AUDIO;
     private static String storagePermissions = Manifest.permission.WRITE_EXTERNAL_STORAGE;
 
     //region Lifecycle
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        ZoomLogger.setLogLevel(ZoomLogger.LEVEL_VERBOSE);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         //Layouts
         clMediaController = (ConstraintLayout) findViewById(R.id.cl_media_controller);
         flFlash = (FrameLayout) findViewById(R.id.fl_flash_layout);
+        zoomVideoSurface = (ZoomSurfaceView) findViewById(R.id.zoom_surface_view);
         ivPausePlayBtn = (ImageView) findViewById(R.id.iv_pause);
         ivRecordStartStopBtn = (ImageView) findViewById(R.id.iv_record_start);
         ivMuteControlBtn = (ImageView) findViewById(R.id.iv_mute);
         ivRecordingIndicator = (ImageView) findViewById(R.id.iv_recording_indicate);
         ivVoiceRecordingStartStopBtn = (ImageView) findViewById(R.id.iv_voice_record_start_stop);
         ivTakeScreenShot = (ImageView) findViewById(R.id.iv_take_video_shot);
+        ivScreenRotate = (ImageView) findViewById(R.id.iv_rotate_screen);
+        ivCloseBtn = (ImageView) findViewById(R.id.iv_close);
+        //ivSdHdBtn = (ImageView) findViewById(R.id.iv_sd_hd_toggle);
         //ProgressBar
         pbShowLoading = (ProgressBar) findViewById(R.id.pb_video_loading);
         //Player
@@ -106,20 +122,26 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
         ivMuteControlBtn.setTag(false);
         //Set voice recording to false on Start
         ivVoiceRecordingStartStopBtn.setTag(false);
+        //Set hd to false
+        //ivSdHdBtn.setTag(false);
 
-        vxgMediaPlayer.setOnTouchListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+        zoomVideoSurface.setOnTouchListener((v, event) -> {
+            if(event.getAction() == MotionEvent.ACTION_DOWN){
                 v.performClick();
                 Log.d(TAG, "ACTION_DOWN");
                 showMediaControls();
+                return true;
             }
-            return true;
+            return false;
         });
     }
 
     @Override
     protected void onStart() {
         super.onStart();
+
+        ZoomSurfaceView surface = findViewById(R.id.zoom_surface_view);
+        surface.onResume();
 
         if (vxgMediaPlayer != null &&
                 MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
@@ -133,6 +155,10 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
     protected void onPause() {
         super.onPause();
 
+        ZoomSurfaceView surface = findViewById(R.id.zoom_surface_view);
+        surface.onPause();
+
+        showLoadingPlayerLoader(false);
         if (vxgMediaPlayer != null &&
                 MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
                 MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closing)) {
@@ -180,6 +206,7 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
         vxgPlayerConfig.setSynchroEnable(1);
         vxgPlayerConfig.setEnableAspectRatio(1);
         vxgPlayerConfig.setConnectionBufferingTime(2500);
+        vxgPlayerConfig.setConnectionTimeout(15000);
 
 //        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
 //        startActivityForResult(i, REQUEST_TREE);
@@ -188,15 +215,28 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
         vxgPlayerConfig.setRecordPath(getRecordPathVideo());
         vxgPlayerConfig.getRecordSplitTime();
         vxgPlayerConfig.setRecordPrefix("vxg_rec");
-
         //Player startup
         vxgMediaPlayer.Open(vxgPlayerConfig,this);
+        //TODO: On portati change to 640 W X 480 H
+        zoomVideoSurface.setContentSize(1920,1080);
+        zoomVideoSurface.addCallback(new ZoomSurfaceView.Callback() {
+            @Override
+            public void onZoomSurfaceCreated(@NotNull ZoomSurfaceView zoomSurfaceView) {
+                vxgMediaPlayer.setSurface(zoomSurfaceView.getSurface());
+            }
+
+            @Override
+            public void onZoomSurfaceDestroyed(@NotNull ZoomSurfaceView zoomSurfaceView) {
+
+            }
+        });
     }
 
     private void showLoadingPlayerLoader(boolean showLoader) {
         if (pbShowLoading != null) {
             if (showLoader) pbShowLoading.setVisibility(View.VISIBLE);
-            else if (pbShowLoading.isShown()) pbShowLoading.setVisibility(View.GONE);
+            else
+                if (pbShowLoading.isShown()) pbShowLoading.setVisibility(View.GONE);
         }
     }
 
@@ -204,30 +244,32 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
     private void showMediaControls() {
         if (clMediaController != null) {
             clMediaController.setVisibility(View.VISIBLE);
+            ivScreenRotate.setVisibility(View.VISIBLE);
+            ivCloseBtn.setVisibility(View.VISIBLE);
+            //ivSdHdBtn.setVisibility(View.VISIBLE);
             if (vxgMediaPlayer != null &&
                     MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
                     MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closing)) {
 
-                ivTakeScreenShot.setOnClickListener(view -> {
-                    takeScreenShot();
-                });
+                ivTakeScreenShot.setOnClickListener(view -> takeScreenShot());
             }
-
             if (vxgMediaPlayer != null &&
                     MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) > MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Opening) &&
                     MediaPlayer.PlayerState.forType(vxgMediaPlayer.getState()) < MediaPlayer.PlayerState.forType(MediaPlayer.PlayerState.Closing)) {
 
                 ivRecordStartStopBtn.setOnClickListener(view -> {
-                    if (vxgMediaPlayer.getState() == MediaPlayer.PlayerState.Started) {
-                        //State of recording: 0: stopped, 1: paused, 2: run
-                        if (vxgMediaPlayer.RecordGetStat(9) == 0 || vxgMediaPlayer.RecordGetStat(9) == 1) {
-                            vxgMediaPlayer.RecordStart();
-                            ivRecordStartStopBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_recording_stop,null));
-                        } else if (vxgMediaPlayer.RecordGetStat(9) == 2) {
-                            vxgMediaPlayer.RecordStop();
-                            ivRecordStartStopBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_record_start,null));
+                    if (checkStoragePermissions()) {
+                        if (vxgMediaPlayer.getState() == MediaPlayer.PlayerState.Started) {
+                            //State of recording: 0: stopped, 1: paused, 2: run
+                            if (vxgMediaPlayer.RecordGetStat(9) == 0 || vxgMediaPlayer.RecordGetStat(9) == 1) {
+                                vxgMediaPlayer.RecordStart();
+                                ivRecordStartStopBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_recording_stop, null));
+                            } else if (vxgMediaPlayer.RecordGetStat(9) == 2) {
+                                vxgMediaPlayer.RecordStop();
+                                ivRecordStartStopBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_record_start, null));
+                            }
                         }
-                    }
+                    } else showToast(getBaseContext(),"Storage permission denied",Toast.LENGTH_LONG);
                 });
 
                 ivPausePlayBtn.setOnClickListener(view -> {
@@ -263,25 +305,81 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
                         ivVoiceRecordingStartStopBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_voice_not_recording));
                         ivVoiceRecordingStartStopBtn.setTag(false);
                     } else if (ivVoiceRecordingStartStopBtn.getTag().equals(false)) {
-                        if (checkVoiceRecordingPermissions() && checkStoragePermissions()) {
-                            startVoiceRecording();
-                            ivVoiceRecordingStartStopBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_voice_recording));
-                            ivVoiceRecordingStartStopBtn.setTag(true);
-                        }
+                        if (checkVoiceRecordingPermissions()) {
+                            if (checkStoragePermissions()) {
+                                startVoiceRecording();
+                                ivVoiceRecordingStartStopBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_voice_recording));
+                                ivVoiceRecordingStartStopBtn.setTag(true);
+                            } else showToast(getBaseContext(),"Storage permission denied",Toast.LENGTH_LONG);
+                        } else showToast(getBaseContext(),"Mic permission denied",Toast.LENGTH_LONG);
                     }
                 });
+
+                //Screen rotation
+                ivScreenRotate.setOnClickListener(view -> changeScreenOrientation());
+                // region Switch to hd/sd  -- not working
+//                ivSdHdBtn.setOnClickListener(view -> {
+//                    if (ivSdHdBtn.getTag().equals(true)) {
+//                        //switchToSD();
+//                        //vxgPlayerConfig.setConnectionUrl("rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mov");
+//                        initVxgMediaPlayer("rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mov");
+//                        ivSdHdBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_hd_off,null));
+//                        ivSdHdBtn.setTag(false);
+//                    } else if (ivSdHdBtn.getTag().equals(false)) {
+//                        //switchToHD();
+//                        //vxgPlayerConfig.setConnectionUrl("rtsp://real.prohosting.com/encoder/daytona.rm");
+//                        initVxgMediaPlayer("rtsp://real.prohosting.com/encoder/daytona.rm");
+//                        ivSdHdBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_hd_on,null));
+//                        ivSdHdBtn.setTag(false);
+//                    }
+//                });
+                //endregion
             }
+            //Close player kill app
+            ivCloseBtn.setOnClickListener(view -> killPlayerAndApp());
             //Remove previous touch handler callback
             mHandler.removeCallbacks(mRunnableHideMediaControls);
             //Add new touch handler callback
             mHandler.postDelayed(mRunnableHideMediaControls, 3000);
         }
     }
+
+    private void switchToHD() {
+    }
+
+    private void switchToSD() {
+
+    }
+
     //Hide media controls
     //Ref ---->  https://stackoverflow.com/a/60523789/10459992
     Runnable mRunnableHideMediaControls = () -> {
-        if (clMediaController != null) clMediaController.setVisibility(View.INVISIBLE);
+        if (clMediaController != null) {
+            clMediaController.setVisibility(View.GONE);
+            ivScreenRotate.setVisibility(View.GONE);
+            ivCloseBtn.setVisibility(View.GONE);
+            //ivSdHdBtn.setVisibility(View.INVISIBLE);
+        }
     };
+
+
+    private void killPlayerAndApp() {
+        finish();
+        System.exit(0);
+    }
+
+    private void changeScreenOrientation() {
+        final int orientation = getResources().getConfiguration().orientation;
+                switch(orientation) {
+                    case Configuration.ORIENTATION_PORTRAIT:
+                        //Use with sensor ref --> https://stackoverflow.com/a/31926128/10459992
+                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                        break;
+                    case Configuration.ORIENTATION_LANDSCAPE:
+                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+                        break;
+                }
+    }
 
     private void takeScreenShot() {
 
@@ -329,8 +427,11 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
 
     private void showScreenShotAnimation() {
         flFlash.setVisibility(View.VISIBLE);
-        AlphaAnimation fade = new AlphaAnimation(1, 0);
-        fade.setDuration(50);
+        AlphaAnimation fade = new AlphaAnimation(1,0);
+        fade.setInterpolator(new AccelerateInterpolator());
+        //Fixed background screen white issue after animation complete
+        fade.setFillAfter(true);
+        fade.setDuration(100);
         flFlash.setLayoutAnimationListener(new Animation.AnimationListener() {
 
             @Override
@@ -350,6 +451,7 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
     }
 
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void startVoiceRecording() {
         String audioPath = getRecordPathAudio();
         if (audioPath.isEmpty()) {
@@ -375,17 +477,29 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
         }
         try {
             audioRecorder.start();
+            //Mute audio on audio recording
+            if (ivMuteControlBtn.getTag().equals(false)) {
+                vxgMediaPlayer.toggleMute(true);
+                ivMuteControlBtn.setTag(true);
+                ivMuteControlBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_unmute,null));
+            }
         } catch (Exception e) {
             Log.d(TAG,"Audio recording start exception---> Permission denied---> \n"+e);
         }
 
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void stopVoiceRecording() {
         if (audioRecorder != null ) {
             try {
                 audioRecorder.stop();
                 audioRecorder.release();
+                if (ivMuteControlBtn.getTag().equals(true)) {
+                    vxgMediaPlayer.toggleMute(false);
+                    ivMuteControlBtn.setTag(false);
+                    ivMuteControlBtn.setImageDrawable(getResources().getDrawable(R.drawable.ic_mute,null));
+                }
             } catch (Exception e) {
                 Log.d(TAG,"Audio recording start exception---> Permission denied---> \n"+e);
             }
@@ -440,6 +554,7 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
     private boolean checkVoiceRecordingPermissions() {
         //If permissions are already granted return true
         boolean[] isPermissionGranted = {false};
+        String recordingPermission = Manifest.permission.RECORD_AUDIO;
         Dexter.withContext(this).withPermission(recordingPermission).withListener(
                 new PermissionListener() {
                     @Override
@@ -608,6 +723,10 @@ public class MainActivity extends AppCompatActivity implements MediaPlayer.Media
                         recordingAnimation(false);
                         if (vxgMediaPlayer != null)
                             showToast(getBaseContext(),"Recorded video successfully saved in "+vxgMediaPlayer.RecordGetFileName(0),Toast.LENGTH_LONG);
+                        break;
+
+                    case VRP_NEED_SURFACE:
+                        Log.d(TAG,"Need surface");
                         break;
                 }
 

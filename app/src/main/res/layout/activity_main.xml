@@ -5,22 +5,72 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/blackBackground"
     tools:context=".MainActivity">
 
     <veg.mediaplayer.sdk.MediaPlayer
         android:id="@+id/playerView"
         android:layout_width="match_parent"
-        android:background="@color/blackBackground"
-        android:layout_height="match_parent">
+        android:layout_height="wrap_content"/>
+
+    <com.otaliastudios.zoom.ZoomSurfaceView
+        android:id="@+id/zoom_surface_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:horizontalPanEnabled="true"
+        app:verticalPanEnabled="true"
+        app:zoomEnabled="true"
+        app:transformation="centerInside"
+        app:transformationGravity="auto"
+        app:alignment="center"
+        app:overPinchable="true"
+        app:minZoom="1"
+        app:minZoomType="zoom"
+        app:maxZoom="4.5"
+        app:maxZoomType="zoom" />
+
+        <ImageView
+            android:id="@+id/iv_rotate_screen"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="10dp"
+            android:padding="2dp"
+            android:elevation="3dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/ic_screen_rotate"
+            android:visibility="gone"/>
 
         <ImageView
             android:id="@+id/iv_recording_indicate"
-            android:layout_width="60dp"
-            android:layout_height="60dp"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
             android:layout_gravity="end"
-            android:layout_marginEnd="25dp"
+            android:layout_marginTop="75dp"
+            android:layout_marginEnd="10dp"
             android:elevation="3dp"
             android:src="@drawable/ic_recording_indicator"
+            android:visibility="gone"/>
+
+<!--        <ImageView-->
+<!--            android:id="@+id/iv_sd_hd_toggle"-->
+<!--            android:layout_width="60dp"-->
+<!--            android:layout_height="50dp"-->
+<!--            android:layout_gravity="end"-->
+<!--            android:layout_marginTop="130dp"-->
+<!--            android:layout_marginEnd="10dp"-->
+<!--            android:padding="4dp"-->
+<!--            android:src="@drawable/ic_hd_off"-->
+<!--            android:visibility="gone"/>-->
+
+        <ImageView
+            android:id="@+id/iv_close"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:padding="10dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginStart="10dp"
+            android:src="@drawable/ic_close"
             android:visibility="gone"/>
 
         <ProgressBar
@@ -35,6 +85,7 @@
             android:id="@+id/fl_flash_layout"
             android:layout_width="fill_parent"
             android:layout_height="fill_parent"
+            android:elevation="4dp"
             android:background="@color/whiteTransparent"
             android:visibility="gone"/>
 
@@ -56,8 +107,8 @@
             <ImageView
                 android:id="@+id/iv_take_video_shot"
                 android:layout_width="50dp"
-                android:layout_height="50dp"
-                android:padding="8dp"
+                android:layout_height="40dp"
+                android:padding="6dp"
                 android:layout_gravity="start"
                 android:src="@drawable/ic_screenshot"
                 app:layout_constraintBottom_toBottomOf="parent"
@@ -70,12 +121,12 @@
             <ImageView
                 android:id="@+id/iv_mute"
                 android:layout_width="50dp"
-                android:layout_height="50dp"
-                android:padding="7dp"
+                android:layout_height="40dp"
+                android:padding="5dp"
                 android:src="@drawable/ic_mute"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@id/iv_pause"
-                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintStart_toEndOf="@id/iv_take_video_shot"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintVertical_bias="0.5"
                 app:layout_constraintHorizontal_bias="0.5"/>
@@ -84,8 +135,9 @@
             <ImageView
                 android:id="@+id/iv_pause"
                 android:layout_width="50dp"
-                android:layout_height="50dp"
+                android:layout_height="40dp"
                 android:layout_gravity="center"
+                android:padding="2dp"
                 android:src="@drawable/ic_pause_button"
                 android:visibility="visible"
                 app:layout_constraintBottom_toBottomOf="parent"
@@ -98,13 +150,13 @@
             <ImageView
                 android:id="@+id/iv_record_start"
                 android:layout_width="50dp"
-                android:layout_height="50dp"
+                android:layout_height="40dp"
                 android:layout_gravity="right"
-                android:padding="7dp"
+                android:padding="5dp"
                 android:src="@drawable/ic_record_start"
                 android:visibility="visible"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/iv_voice_record_start_stop"
                 app:layout_constraintHorizontal_bias="0.5"
                 app:layout_constraintStart_toEndOf="@+id/iv_pause"
                 app:layout_constraintTop_toTopOf="parent"
@@ -113,9 +165,9 @@
             <ImageView
                 android:id="@+id/iv_voice_record_start_stop"
                 android:layout_width="50dp"
-                android:layout_height="50dp"
+                android:layout_height="40dp"
                 android:layout_gravity="end"
-                android:padding="8dp"
+                android:padding="6dp"
                 android:src="@drawable/ic_voice_not_recording"
                 app:layout_constraintStart_toEndOf="@id/iv_record_start"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -126,6 +178,5 @@
 
 
         </androidx.constraintlayout.widget.ConstraintLayout>
-    </veg.mediaplayer.sdk.MediaPlayer>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
